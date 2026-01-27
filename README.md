@@ -48,16 +48,7 @@ The system evaluates calls across 5 categories (19 total items):
    uv pip install -r requirements.txt
    ```
 
-3. Install ffmpeg (required for audio processing):
-   ```bash
-   # macOS
-   brew install ffmpeg
-
-   # Ubuntu/Debian
-   sudo apt-get install ffmpeg
-   ```
-
-4. Copy `.env.example` to `.env` and add your OpenAI API key:
+3. Copy `.env.example` to `.env` and add your OpenAI API key:
    ```bash
    cp .env.example .env
    # Edit .env and set OPENAI_API_KEY
@@ -79,8 +70,10 @@ Then:
 
 ## Supported Formats
 
-- **Audio:** WAV, MP3, M4A, FLAC, OGG, WEBM
+- **Audio:** WAV, MP3, M4A, FLAC, OGG, WEBM (max 25MB per file)
 - **Text:** TXT, JSON
+
+**Note:** Audio files are limited to 25MB due to Whisper API constraints.
 
 ## Configuration
 

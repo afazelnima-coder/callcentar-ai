@@ -6,13 +6,17 @@ from openai import RateLimitError, APITimeoutError
 from app.config import settings
 
 
+# Whisper API limit is 25MB
+MAX_WHISPER_FILE_SIZE_MB = 25
+
+
 class WhisperService:
     """Service for transcribing audio using OpenAI Whisper API."""
 
     def __init__(self):
         self.client = OpenAI(api_key=settings.openai_api_key)
         self.model = settings.whisper_model
-        self.chunk_size_bytes = settings.audio_chunk_size_mb * 1024 * 1024
+        self.max_file_size_bytes = MAX_WHISPER_FILE_SIZE_MB * 1024 * 1024
 
     @retry(
         stop=stop_after_attempt(3),
@@ -27,13 +31,20 @@ class WhisperService:
             file_path: Path to the audio file
 
         Returns:
-            dict with 'text', 'language', and optionally 'words' for timestamps
+            dict with 'text', 'language', 'duration'
+
+        Raises:
+            ValueError: If file exceeds 25MB limit
         """
         file_size = os.path.getsize(file_path)
 
-        # Check if file needs chunking (Whisper limit is 25MB)
-        if file_size > self.chunk_size_bytes:
-            return self._transcribe_chunked(file_path)
+        # Check file size (Whisper API limit is 25MB)
+        if file_size > self.max_file_size_bytes:
+            size_mb = file_size / (1024 * 1024)
+            raise ValueError(
+                f"Audio file is {size_mb:.1f}MB, which exceeds the 25MB limit. "
+                "Please use a shorter audio file or compress it."
+            )
 
         return self._transcribe_single(file_path)
 
@@ -51,48 +62,4 @@ class WhisperService:
             "language": response.language,
             "duration": response.duration,
             "words": getattr(response, "words", None),
-        }
-
-    def _transcribe_chunked(self, file_path: str) -> dict:
-        """
-        Transcribe large audio files by splitting into chunks.
-        Uses pydub for audio manipulation.
-        """
-        from pydub import AudioSegment
-
-        # Load audio file
-        audio = AudioSegment.from_file(file_path)
-
-        # Calculate chunk duration (based on approximate file size per minute)
-        # Assuming ~1MB per minute of audio at standard quality
-        chunk_duration_ms = (self.chunk_size_bytes / 1024 / 1024) * 60 * 1000
-
-        chunks = []
-        start = 0
-        while start < len(audio):
-            end = min(start + int(chunk_duration_ms), len(audio))
-            chunks.append(audio[start:end])
-            start = end
-
-        # Transcribe each chunk
-        transcripts = []
-        for i, chunk in enumerate(chunks):
-            # Export chunk to temporary file
-            chunk_path = f"/tmp/chunk_{i}.mp3"
-            chunk.export(chunk_path, format="mp3")
-
-            try:
-                result = self._transcribe_single(chunk_path)
-                transcripts.append(result["text"])
-            finally:
-                # Clean up temp file
-                if os.path.exists(chunk_path):
-                    os.remove(chunk_path)
-
-        # Combine transcripts
-        return {
-            "text": " ".join(transcripts),
-            "language": None,  # Can't reliably detect from chunks
-            "duration": len(audio) / 1000,  # Convert ms to seconds
-            "words": None,  # Timestamps not reliable across chunks
         }

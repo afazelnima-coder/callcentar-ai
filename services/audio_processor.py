@@ -1,11 +1,9 @@
 import os
-from typing import Optional
-from pydub import AudioSegment
-from pydub.utils import mediainfo
+from mutagen import File as MutagenFile
 
 
 class AudioProcessor:
-    """Service for processing and validating audio files."""
+    """Service for processing and validating audio files using mutagen (no ffmpeg required)."""
 
     SUPPORTED_FORMATS = {".wav", ".mp3", ".m4a", ".flac", ".ogg", ".webm"}
 
@@ -14,7 +12,7 @@ class AudioProcessor:
 
     def get_audio_info(self, file_path: str) -> dict:
         """
-        Extract audio file information.
+        Extract audio file information using mutagen.
 
         Args:
             file_path: Path to the audio file
@@ -23,23 +21,40 @@ class AudioProcessor:
             dict with duration, sample_rate, channels, format
         """
         try:
-            # Use pydub's mediainfo for detailed info
-            info = mediainfo(file_path)
+            audio = MutagenFile(file_path)
+
+            if audio is None:
+                # Mutagen couldn't identify the file type
+                return {
+                    "duration": 0,
+                    "sample_rate": 0,
+                    "channels": 0,
+                    "format": os.path.splitext(file_path)[1][1:],
+                    "bit_rate": None,
+                }
+
+            # Get duration (available on all mutagen file types)
+            duration = audio.info.length if hasattr(audio.info, "length") else 0
+
+            # Get sample rate and channels based on file type
+            sample_rate = getattr(audio.info, "sample_rate", 0)
+            channels = getattr(audio.info, "channels", 0)
+            bit_rate = getattr(audio.info, "bitrate", None)
 
             return {
-                "duration": float(info.get("duration", 0)),
-                "sample_rate": int(info.get("sample_rate", 0)),
-                "channels": int(info.get("channels", 0)),
-                "format": info.get("format_name", "unknown"),
-                "bit_rate": info.get("bit_rate"),
+                "duration": duration,
+                "sample_rate": sample_rate,
+                "channels": channels,
+                "format": os.path.splitext(file_path)[1][1:],
+                "bit_rate": bit_rate,
             }
-        except Exception as e:
-            # Fallback to pydub for basic info
-            audio = AudioSegment.from_file(file_path)
+
+        except Exception:
+            # Return basic info on error
             return {
-                "duration": len(audio) / 1000,  # Convert ms to seconds
-                "sample_rate": audio.frame_rate,
-                "channels": audio.channels,
+                "duration": 0,
+                "sample_rate": 0,
+                "channels": 0,
                 "format": os.path.splitext(file_path)[1][1:],
                 "bit_rate": None,
             }
@@ -49,27 +64,11 @@ class AudioProcessor:
         ext = os.path.splitext(file_path)[1].lower()
         return ext in self.SUPPORTED_FORMATS
 
-    def convert_to_mp3(self, file_path: str, output_path: Optional[str] = None) -> str:
-        """
-        Convert audio file to MP3 format.
-
-        Args:
-            file_path: Path to the input audio file
-            output_path: Optional output path (defaults to same name with .mp3)
-
-        Returns:
-            Path to the converted file
-        """
-        if output_path is None:
-            base = os.path.splitext(file_path)[0]
-            output_path = f"{base}.mp3"
-
-        audio = AudioSegment.from_file(file_path)
-        audio.export(output_path, format="mp3")
-
-        return output_path
-
     def get_duration_seconds(self, file_path: str) -> float:
         """Get the duration of an audio file in seconds."""
-        audio = AudioSegment.from_file(file_path)
-        return len(audio) / 1000
+        info = self.get_audio_info(file_path)
+        return info.get("duration", 0)
+
+    def get_file_size_mb(self, file_path: str) -> float:
+        """Get file size in megabytes."""
+        return os.path.getsize(file_path) / (1024 * 1024)
