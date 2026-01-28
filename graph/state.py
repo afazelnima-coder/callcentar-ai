@@ -35,10 +35,12 @@ class CallCenterState(TypedDict, total=False):
     validation_errors: List[str]  # List of validation issues
 
     # === Transcription (from Transcription Agent) ===
-    transcript: Optional[str]  # Final transcript text
+    transcript: Optional[str]  # Transcript with speaker labels
+    transcript_plain: Optional[str]  # Plain transcript without speaker labels
+    speaker_segments: Optional[List[dict]]  # Speaker-labeled segments with timestamps
+    num_speakers: Optional[int]  # Number of detected speakers
     transcription_language: Optional[str]  # Detected language
     transcription_duration: Optional[float]  # Audio duration in seconds
-    word_timestamps: Optional[List[dict]]  # Word-level timestamps if available
 
     # === Summarization (from Summarization Agent) ===
     summary: Optional[CallSummary]  # Structured call summary

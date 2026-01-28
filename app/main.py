@@ -263,14 +263,25 @@ def display_results(state: CallCenterState, show_transcript: bool, show_detailed
         if scores.escalation_recommended:
             st.error("This call has been flagged for supervisor review.")
 
-    # Transcript
+    # Transcript with speaker labels
     if show_transcript and state.get("transcript"):
-        with st.expander("Full Transcript"):
-            st.text(state["transcript"])
+        with st.expander("Full Transcript", expanded=True):
+            num_speakers = state.get("num_speakers", 0)
+            if num_speakers > 0:
+                st.caption(f"Detected {num_speakers} speaker(s)")
+
+            # Display formatted transcript with speaker labels
+            transcript = state["transcript"]
+            # Use markdown for better formatting of speaker labels
+            st.markdown(transcript.replace("\n", "  \n"))
 
     # Processing info
     with st.expander("Processing Details"):
         st.write(f"**Processing Time:** {state.get('processing_time_seconds', 0):.2f} seconds")
+        if state.get("num_speakers"):
+            st.write(f"**Speakers Detected:** {state.get('num_speakers')}")
+        if state.get("transcription_duration"):
+            st.write(f"**Audio Duration:** {state.get('transcription_duration'):.1f} seconds")
         if state.get("metadata"):
             metadata = state["metadata"]
             st.write(f"**File:** {metadata.file_name}")

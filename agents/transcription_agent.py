@@ -1,20 +1,20 @@
 from typing import Any
 
-from services.whisper_service import WhisperService
+from services.deepgram_service import DeepgramService
 
 
 def transcription_node(state: dict[str, Any]) -> dict[str, Any]:
     """
-    Transcribes audio file using OpenAI Whisper API.
+    Transcribes audio file using Deepgram API with speaker diarization.
 
     This agent:
     1. Checks if a transcript already exists (skips if so)
-    2. Calls Whisper API to transcribe the audio
-    3. Handles large files by chunking
-    4. Extracts language and confidence information
+    2. Calls Deepgram API to transcribe the audio
+    3. Identifies different speakers in the conversation
+    4. Returns formatted transcript with speaker labels
 
     Returns:
-        dict with transcript and related metadata
+        dict with transcript, speaker segments, and related metadata
     """
     # Skip if transcript already exists (e.g., user provided text file)
     if state.get("transcript"):
@@ -31,16 +31,22 @@ def transcription_node(state: dict[str, Any]) -> dict[str, Any]:
                 "current_step": "transcription",
             }
 
-        whisper = WhisperService()
+        deepgram = DeepgramService()
 
-        # Transcribe (handles chunking for large files internally)
-        result = whisper.transcribe(file_path)
+        # Transcribe with speaker diarization
+        result = deepgram.transcribe(file_path)
+
+        # Use formatted transcript with speaker labels as the main transcript
+        # This will be used by summarization and scoring agents
+        transcript = result.get("formatted_transcript") or result.get("text", "")
 
         return {
-            "transcript": result["text"],
+            "transcript": transcript,
+            "transcript_plain": result.get("text"),  # Plain text without labels
+            "speaker_segments": result.get("speakers", []),
+            "num_speakers": result.get("num_speakers", 0),
             "transcription_language": result.get("language"),
             "transcription_duration": result.get("duration"),
-            "word_timestamps": result.get("words"),
             "current_step": "transcription",
             "error": None,  # Clear any previous error
         }
