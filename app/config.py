@@ -8,7 +8,9 @@ class Settings(BaseSettings):
     # OpenAI Configuration
     openai_api_key: str = Field(..., alias="OPENAI_API_KEY")
     openai_model: str = Field(default="gpt-4o", alias="OPENAI_MODEL")
-    whisper_model: str = Field(default="whisper-1", alias="WHISPER_MODEL")
+
+    # Deepgram Configuration (for transcription with speaker diarization)
+    deepgram_api_key: str = Field(..., alias="DEEPGRAM_API_KEY")
 
     # Processing Configuration
     max_file_size_mb: int = Field(default=100, alias="MAX_FILE_SIZE_MB")
