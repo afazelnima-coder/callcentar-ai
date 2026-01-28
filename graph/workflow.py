@@ -1,7 +1,13 @@
 from langgraph.graph import StateGraph, START, END
 
 from graph.state import CallCenterState
-from graph.edges import route_after_intake, route_after_routing
+from graph.edges import (
+    route_after_intake,
+    route_after_transcription,
+    route_after_summarization,
+    route_after_scoring,
+    route_after_routing,
+)
 from agents.intake_agent import call_intake_node
 from agents.transcription_agent import transcription_node
 from agents.summarization_agent import summarization_node
@@ -13,35 +19,8 @@ def create_workflow() -> StateGraph:
     """
     Create and compile the call center grading workflow.
 
-    The workflow processes calls through these stages:
-    1. Intake: Validate input and extract metadata
-    2. Transcription: Convert audio to text (skipped if transcript provided)
-    3. Summarization: Generate call summary and key points
-    4. Scoring: Evaluate quality using 19-item rubric
-    5. Routing: Determine success/retry/failure
-
-    Graph structure:
-        START
-          |
-        intake
-          |
-        [conditional: has_audio?]
-          |           \
-    transcription    (skip)
-          |           /
-        summarization
-          |
-        scoring
-          |
-        routing
-          |
-        [conditional: success/retry/fallback]
-         |      |           |
-        END   retry    error_handler
-              (loop)         |
-                           END
+    Each step has error checking to route to error_handler if something fails.
     """
-    # Initialize the graph with state schema
     builder = StateGraph(CallCenterState)
 
     # Add all nodes
@@ -51,8 +30,6 @@ def create_workflow() -> StateGraph:
     builder.add_node("scoring", scoring_node)
     builder.add_node("routing", routing_node)
     builder.add_node("error_handler", error_handler_node)
-
-    # Define edges
 
     # Start -> Intake
     builder.add_edge(START, "intake")
@@ -68,14 +45,35 @@ def create_workflow() -> StateGraph:
         },
     )
 
-    # Transcription -> Summarization
-    builder.add_edge("transcription", "summarization")
+    # Transcription -> Conditional (summarization or error)
+    builder.add_conditional_edges(
+        "transcription",
+        route_after_transcription,
+        {
+            "summarization": "summarization",
+            "error_handler": "error_handler",
+        },
+    )
 
-    # Summarization -> Scoring
-    builder.add_edge("summarization", "scoring")
+    # Summarization -> Conditional (scoring or error)
+    builder.add_conditional_edges(
+        "summarization",
+        route_after_summarization,
+        {
+            "scoring": "scoring",
+            "error_handler": "error_handler",
+        },
+    )
 
-    # Scoring -> Routing
-    builder.add_edge("scoring", "routing")
+    # Scoring -> Conditional (routing or error)
+    builder.add_conditional_edges(
+        "scoring",
+        route_after_scoring,
+        {
+            "routing": "routing",
+            "error_handler": "error_handler",
+        },
+    )
 
     # Routing -> Conditional (end, retry, or error)
     builder.add_conditional_edges(
@@ -83,7 +81,7 @@ def create_workflow() -> StateGraph:
         route_after_routing,
         {
             "__end__": END,
-            "transcription": "transcription",  # Retry loop
+            "transcription": "transcription",
             "error_handler": "error_handler",
         },
     )
@@ -91,7 +89,6 @@ def create_workflow() -> StateGraph:
     # Error handler -> End
     builder.add_edge("error_handler", END)
 
-    # Compile the graph
     return builder.compile()
 
 
