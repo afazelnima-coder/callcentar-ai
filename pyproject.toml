@@ -1,7 +1,20 @@
 [project]
 name = "call-center"
 version = "0.1.0"
-description = "Add your description here"
+description = "Call center quality grading system using multi-agent AI"
 readme = "README.md"
 requires-python = ">=3.13"
-dependencies = []
+dependencies = [
+    "langgraph>=0.2.0",
+    "langchain-openai>=0.2.0",
+    "openai>=1.40.0",
+    "pydantic>=2.0.0",
+    "pydantic-settings>=2.0.0",
+    "streamlit>=1.35.0",
+    "mutagen>=1.47.0",
+    "python-dotenv>=1.0.0",
+    "tenacity>=8.2.0",
+]
+
+[tool.setuptools]
+packages = ["app", "agents", "graph", "schemas", "services", "utils"]
