@@ -1,7 +1,11 @@
+import logging
 from typing import Any
 
+from agents.intake_agent import validate_transcript_content, ContentValidationError
 from services.deepgram_service import DeepgramService
 from services.openai_service import OpenAIService
+
+logger = logging.getLogger(__name__)
 
 
 SPEAKER_IDENTIFICATION_PROMPT = """Analyze this call center transcript and identify which speaker is the Agent (customer service representative) and which is the Customer.
@@ -23,14 +27,19 @@ def transcription_node(state: dict[str, Any]) -> dict[str, Any]:
     Transcribes audio file using Deepgram API with speaker diarization,
     then uses GPT to identify speaker roles (Agent vs Customer).
     """
+    logger.info("=== TRANSCRIPTION AGENT START ===")
+
     # Skip if transcript already exists (e.g., user provided text file)
     if state.get("transcript"):
+        logger.info("Transcript already exists, skipping transcription")
         return {"current_step": "transcription"}
 
     try:
         file_path = state.get("input_file_path")
+        logger.info(f"Transcribing file: {file_path}")
 
         if not file_path:
+            logger.error("No input file path for transcription")
             return {
                 "error": "No input file path for transcription",
                 "error_type": "MissingInputError",
@@ -39,18 +48,32 @@ def transcription_node(state: dict[str, Any]) -> dict[str, Any]:
             }
 
         # Step 1: Transcribe with Deepgram
+        logger.info("Calling Deepgram API...")
         deepgram = DeepgramService()
         result = deepgram.transcribe(file_path)
+        logger.info("Deepgram transcription complete")
 
         formatted_transcript = result.get("formatted_transcript") or result.get("text", "")
         speakers = result.get("speakers", [])
 
-        # Step 2: Use GPT to identify speaker roles if we have multiple speakers
+        # Step 2: Validate the transcribed content is a call center conversation
+        logger.info("Validating transcribed content...")
+        is_valid, reason = validate_transcript_content(formatted_transcript)
+        logger.info(f"Validation result: is_valid={is_valid}, reason={reason}")
+
+        if not is_valid:
+            # Raise exception to immediately stop the workflow
+            logger.error(f"CONTENT VALIDATION FAILED: {reason}")
+            raise ContentValidationError(f"Invalid audio content: {reason}")
+
+        # Step 3: Use GPT to identify speaker roles if we have multiple speakers
         if speakers and result.get("num_speakers", 0) > 1:
+            logger.info("Identifying speaker roles...")
             formatted_transcript, speakers = _identify_speaker_roles(
                 formatted_transcript, speakers
             )
 
+        logger.info("=== TRANSCRIPTION AGENT COMPLETE ===")
         return {
             "transcript": formatted_transcript,
             "transcript_plain": result.get("text"),
@@ -62,7 +85,13 @@ def transcription_node(state: dict[str, Any]) -> dict[str, Any]:
             "error": None,
         }
 
+    except ContentValidationError:
+        # Re-raise ContentValidationError to stop the workflow
+        logger.error("Re-raising ContentValidationError to stop workflow")
+        raise
+
     except Exception as e:
+        logger.error(f"Transcription error: {type(e).__name__}: {str(e)}")
         return {
             "error": f"Transcription failed: {str(e)}",
             "error_type": "TranscriptionError",

@@ -1,7 +1,10 @@
+import logging
 from typing import Any
 
 from services.openai_service import OpenAIService
 from schemas.output_schemas import CallSummary
+
+logger = logging.getLogger(__name__)
 
 
 SYSTEM_PROMPT = """You are a call center quality assurance analyst. Your job is to
@@ -36,8 +39,32 @@ def summarization_node(state: dict[str, Any]) -> dict[str, Any]:
     Returns:
         dict with summary and related analysis
     """
+    logger.info("=== SUMMARIZATION AGENT START ===")
+    logger.info(f"Current state: workflow_status={state.get('workflow_status')}, error={state.get('error')}")
+
     try:
+        # Check if workflow has already failed (e.g., content validation)
+        if state.get("workflow_status") == "failed":
+            logger.info("Workflow already failed, propagating error")
+            return {
+                "current_step": "summarization",
+                "error": state.get("error", "Previous step failed"),
+                "error_type": state.get("error_type", "PreviousStepError"),
+                "workflow_status": "failed",
+            }
+
+        # Check if there's an existing error from intake validation
+        if state.get("error"):
+            logger.info(f"Found existing error: {state.get('error')}")
+            return {
+                "current_step": "summarization",
+                "error": state.get("error"),
+                "error_type": state.get("error_type", "ValidationError"),
+                "workflow_status": "failed",
+            }
+
         transcript = state.get("transcript")
+        logger.info(f"Transcript present: {transcript is not None}, length: {len(transcript) if transcript else 0}")
 
         if not transcript:
             return {
@@ -65,6 +92,7 @@ def summarization_node(state: dict[str, Any]) -> dict[str, Any]:
         else:
             resolution_status = "pending"
 
+        logger.info("=== SUMMARIZATION AGENT COMPLETE ===")
         return {
             "summary": summary,
             "key_points": summary.key_topics,
@@ -75,6 +103,7 @@ def summarization_node(state: dict[str, Any]) -> dict[str, Any]:
         }
 
     except Exception as e:
+        logger.error(f"Summarization error: {type(e).__name__}: {str(e)}")
         return {
             "error": f"Summarization failed: {str(e)}",
             "error_type": "SummarizationError",

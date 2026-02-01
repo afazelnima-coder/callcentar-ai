@@ -128,7 +128,13 @@ def process_file(uploaded_file, max_retries, show_transcript, show_detailed_scor
         except Exception as e:
             progress_bar.progress(100)
             status_text.empty()
-            st.error(f"Workflow error: {str(e)}")
+
+            # Check if it's a content validation error
+            if type(e).__name__ == "ContentValidationError":
+                st.error(f"Content Validation Failed: {str(e)}")
+                st.warning("Please upload a valid call center recording or transcript.")
+            else:
+                st.error(f"Workflow error: {str(e)}")
 
     finally:
         # Cleanup temp file

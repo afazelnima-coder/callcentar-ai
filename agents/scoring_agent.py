@@ -1,8 +1,11 @@
+import logging
 from typing import Any
 
 from services.openai_service import OpenAIService
 from schemas.output_schemas import QualityScores
 from utils.scoring_utils import calculate_overall_grade
+
+logger = logging.getLogger(__name__)
 
 
 SYSTEM_PROMPT = """You are an expert call center quality assurance evaluator with years
@@ -87,11 +90,26 @@ def scoring_node(state: dict[str, Any]) -> dict[str, Any]:
     Returns:
         dict with quality scores and recommendations
     """
+    logger.info("=== SCORING AGENT START ===")
+    logger.info(f"Current state: workflow_status={state.get('workflow_status')}, error={state.get('error')}")
+
     try:
+        # Check if workflow has already failed
+        if state.get("workflow_status") == "failed" or state.get("error"):
+            logger.info("Workflow already failed, propagating error")
+            return {
+                "current_step": "scoring",
+                "error": state.get("error", "Previous step failed"),
+                "error_type": state.get("error_type", "PreviousStepError"),
+                "workflow_status": "failed",
+            }
+
         transcript = state.get("transcript")
         summary = state.get("summary")
+        logger.info(f"Transcript present: {transcript is not None}, Summary present: {summary is not None}")
 
         if not transcript:
+            logger.error("No transcript available for scoring")
             return {
                 "error": "No transcript available for scoring",
                 "error_type": "MissingScoringInputError",
@@ -117,6 +135,7 @@ def scoring_node(state: dict[str, Any]) -> dict[str, Any]:
         # Verify grade calculation
         overall_grade = calculate_overall_grade(quality_scores.percentage_score)
 
+        logger.info(f"=== SCORING AGENT COMPLETE === Grade: {overall_grade}")
         return {
             "quality_scores": quality_scores,
             "overall_grade": overall_grade,

@@ -112,5 +112,6 @@ def _get_user_friendly_error(error_type: str, error: str) -> str:
         "MissingInputError": "Required input was not provided.",
         "MissingTranscriptError": "Transcript is required but was not available.",
         "MissingScoringInputError": "Cannot score without a transcript.",
+        "ContentValidationError": error,  # Pass through the detailed validation reason
     }
     return error_messages.get(error_type, f"An error occurred: {error}")
