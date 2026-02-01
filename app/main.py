@@ -33,12 +33,12 @@ def main():
         st.markdown("**Audio:** WAV, MP3, M4A, FLAC, OGG")
         st.markdown("**Text:** TXT")
 
-    # Main content area
-    col1, col2 = st.columns([1, 1])
+    # Upload section at the top
+    st.subheader("Upload Call Recording or Transcript")
 
-    with col1:
-        st.subheader("Upload Call Recording or Transcript")
+    upload_col1, upload_col2 = st.columns([2, 1])
 
+    with upload_col1:
         # File uploader
         uploaded_file = st.file_uploader(
             "Choose a file",
@@ -46,6 +46,7 @@ def main():
             help="Supported formats: WAV, MP3, M4A, FLAC, OGG (audio) or TXT (transcript)",
         )
 
+    with upload_col2:
         # Optional metadata inputs
         with st.expander("Optional: Add Call Metadata"):
             call_id = st.text_input("Call ID")
@@ -54,20 +55,22 @@ def main():
                 "Call Type", ["Support", "Sales", "Inquiry", "Complaint", "Other"]
             )
 
-        # Process button
-        if uploaded_file is not None:
-            if st.button("Analyze Call", type="primary", use_container_width=True):
-                process_file(
-                    uploaded_file, max_retries, col2, show_transcript, show_detailed_scores
-                )
+    # Process button
+    if uploaded_file is not None:
+        if st.button("Analyze Call", type="primary"):
+            process_file(
+                uploaded_file, max_retries, show_transcript, show_detailed_scores
+            )
 
-    with col2:
-        # Results will be displayed here by process_file()
-        if "results" not in st.session_state:
-            st.info("Upload a file and click 'Analyze Call' to see results.")
+    # Results section - full width below upload
+    st.divider()
+    if "results" in st.session_state:
+        display_results(st.session_state["results"], show_transcript, show_detailed_scores)
+    else:
+        st.info("Upload a file and click 'Analyze Call' to see results.")
 
 
-def process_file(uploaded_file, max_retries, results_col, show_transcript, show_detailed_scores):
+def process_file(uploaded_file, max_retries, show_transcript, show_detailed_scores):
     """Process the uploaded file through the LangGraph workflow."""
 
     # Save uploaded file to temp location
@@ -88,46 +91,44 @@ def process_file(uploaded_file, max_retries, results_col, show_transcript, show_
             "error_history": [],
         }
 
-        # Progress display
-        with results_col:
-            st.subheader("Processing...")
+        # Progress display - full width
+        st.subheader("Processing...")
 
-            # Create progress indicators
-            progress_bar = st.progress(0)
-            status_text = st.empty()
+        # Create progress indicators
+        progress_bar = st.progress(0)
+        status_text = st.empty()
 
-            # Step tracking
-            steps = ["Validating", "Transcribing", "Summarizing", "Scoring", "Complete"]
-            step_progress = {
-                "intake": 20,
-                "transcription": 40,
-                "summarization": 60,
-                "scoring": 80,
-                "routing": 100,
-            }
+        # Step tracking
+        steps = ["Validating", "Transcribing", "Summarizing", "Scoring", "Complete"]
+        step_progress = {
+            "intake": 20,
+            "transcription": 40,
+            "summarization": 60,
+            "scoring": 80,
+            "routing": 100,
+        }
 
-            status_text.text("Starting analysis...")
-            progress_bar.progress(10)
+        status_text.text("Starting analysis...")
+        progress_bar.progress(10)
 
-            # Execute workflow
-            try:
-                final_state = workflow.invoke(initial_state)
+        # Execute workflow
+        try:
+            final_state = workflow.invoke(initial_state)
 
-                # Update progress
-                progress_bar.progress(100)
-                status_text.empty()
+            # Update progress
+            progress_bar.progress(100)
+            status_text.empty()
 
-                # Clear processing message and display results
-                st.empty()
-                display_results(final_state, show_transcript, show_detailed_scores)
+            # Store in session state - will be displayed by main()
+            st.session_state["results"] = final_state
 
-                # Store in session state
-                st.session_state["results"] = final_state
+            # Rerun to display results in the proper section
+            st.rerun()
 
-            except Exception as e:
-                progress_bar.progress(100)
-                status_text.empty()
-                st.error(f"Workflow error: {str(e)}")
+        except Exception as e:
+            progress_bar.progress(100)
+            status_text.empty()
+            st.error(f"Workflow error: {str(e)}")
 
     finally:
         # Cleanup temp file
