@@ -1,20 +1,27 @@
 from typing import Any
 
 from services.deepgram_service import DeepgramService
+from services.openai_service import OpenAIService
+
+
+SPEAKER_IDENTIFICATION_PROMPT = """Analyze this call center transcript and identify which speaker is the Agent (customer service representative) and which is the Customer.
+
+Transcript:
+{transcript}
+
+Based on the context (who greets, who asks for help, who provides solutions, etc.), determine the role of each speaker.
+
+Return ONLY a JSON object mapping speaker IDs to roles, like:
+{{"0": "Agent", "1": "Customer"}}
+
+If there are more than 2 speakers, identify additional ones as "Customer 2", "Supervisor", etc.
+Return ONLY the JSON, no other text."""
 
 
 def transcription_node(state: dict[str, Any]) -> dict[str, Any]:
     """
-    Transcribes audio file using Deepgram API with speaker diarization.
-
-    This agent:
-    1. Checks if a transcript already exists (skips if so)
-    2. Calls Deepgram API to transcribe the audio
-    3. Identifies different speakers in the conversation
-    4. Returns formatted transcript with speaker labels
-
-    Returns:
-        dict with transcript, speaker segments, and related metadata
+    Transcribes audio file using Deepgram API with speaker diarization,
+    then uses GPT to identify speaker roles (Agent vs Customer).
     """
     # Skip if transcript already exists (e.g., user provided text file)
     if state.get("transcript"):
@@ -31,24 +38,28 @@ def transcription_node(state: dict[str, Any]) -> dict[str, Any]:
                 "current_step": "transcription",
             }
 
+        # Step 1: Transcribe with Deepgram
         deepgram = DeepgramService()
-
-        # Transcribe with speaker diarization
         result = deepgram.transcribe(file_path)
 
-        # Use formatted transcript with speaker labels as the main transcript
-        # This will be used by summarization and scoring agents
-        transcript = result.get("formatted_transcript") or result.get("text", "")
+        formatted_transcript = result.get("formatted_transcript") or result.get("text", "")
+        speakers = result.get("speakers", [])
+
+        # Step 2: Use GPT to identify speaker roles if we have multiple speakers
+        if speakers and result.get("num_speakers", 0) > 1:
+            formatted_transcript, speakers = _identify_speaker_roles(
+                formatted_transcript, speakers
+            )
 
         return {
-            "transcript": transcript,
-            "transcript_plain": result.get("text"),  # Plain text without labels
-            "speaker_segments": result.get("speakers", []),
+            "transcript": formatted_transcript,
+            "transcript_plain": result.get("text"),
+            "speaker_segments": speakers,
             "num_speakers": result.get("num_speakers", 0),
             "transcription_language": result.get("language"),
             "transcription_duration": result.get("duration"),
             "current_step": "transcription",
-            "error": None,  # Clear any previous error
+            "error": None,
         }
 
     except Exception as e:
@@ -58,3 +69,63 @@ def transcription_node(state: dict[str, Any]) -> dict[str, Any]:
             "error_count": state.get("error_count", 0) + 1,
             "current_step": "transcription",
         }
+
+
+def _identify_speaker_roles(transcript: str, speakers: list[dict]) -> tuple[str, list[dict]]:
+    """
+    Use GPT to identify speaker roles and relabel the transcript.
+    """
+    import json
+
+    try:
+        openai_service = OpenAIService()
+
+        # Ask GPT to identify roles
+        response = openai_service.generate(
+            prompt=SPEAKER_IDENTIFICATION_PROMPT.format(transcript=transcript),
+            system_prompt="You are a helpful assistant that analyzes call transcripts. Return only valid JSON.",
+        )
+
+        # Parse the response
+        # Clean up response in case it has markdown code blocks
+        response = response.strip()
+        if response.startswith("```"):
+            response = response.split("```")[1]
+            if response.startswith("json"):
+                response = response[4:]
+        response = response.strip()
+
+        role_mapping = json.loads(response)
+
+        # Relabel the transcript
+        updated_transcript = transcript
+        updated_speakers = []
+
+        for speaker in speakers:
+            # Handle both int and float speaker IDs
+            raw_id = speaker.get("speaker_id", 0)
+            speaker_id = str(int(raw_id)) if isinstance(raw_id, (int, float)) else str(raw_id)
+            role = role_mapping.get(speaker_id, f"Speaker {speaker_id}")
+
+            # Update speaker info
+            updated_speaker = speaker.copy()
+            updated_speaker["role"] = role
+            updated_speakers.append(updated_speaker)
+
+        # Replace speaker labels in transcript - handle multiple formats
+        for speaker_id, role in role_mapping.items():
+            # Try both "Speaker 0" and "Speaker 0.0" formats
+            updated_transcript = updated_transcript.replace(
+                f"**Speaker {speaker_id}:**",
+                f"**{role}:**"
+            )
+            updated_transcript = updated_transcript.replace(
+                f"**Speaker {speaker_id}.0:**",
+                f"**{role}:**"
+            )
+
+        return updated_transcript, updated_speakers
+
+    except Exception:
+        # If GPT fails, return original transcript
+        return transcript, speakers

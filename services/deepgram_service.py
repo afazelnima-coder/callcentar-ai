@@ -63,7 +63,8 @@ class DeepgramService:
 
         if utterances:
             for utterance in utterances:
-                speaker_id = getattr(utterance, "speaker", 0)
+                # Convert speaker_id to int to avoid float formatting (0.0 -> 0)
+                speaker_id = int(getattr(utterance, "speaker", 0))
                 text = getattr(utterance, "transcript", "")
                 start = getattr(utterance, "start", 0)
                 end = getattr(utterance, "end", 0)
