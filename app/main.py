@@ -14,6 +14,77 @@ st.set_page_config(
     layout="wide",
 )
 
+# Workflow steps definition
+WORKFLOW_STEPS = [
+    ("intake", "Intake Agent", "Validates file & extracts metadata"),
+    ("transcription", "Transcription Agent", "Converts audio to text"),
+    ("summarization", "Summarization Agent", "Generates call summary"),
+    ("scoring", "Scoring Agent", "Evaluates quality"),
+    ("routing", "Routing Agent", "Determines outcome"),
+]
+
+
+def build_workflow_status_markdown(current_step: str = None, status: str = "idle") -> str:
+    """Build the workflow status as a markdown string."""
+    # Use Unicode emoji characters (shortcodes don't render in st.empty().markdown())
+    ICON_PENDING = "⚪"      # White circle
+    ICON_RUNNING = "🟠"      # Orange circle
+    ICON_COMPLETE = "✅"     # Check mark
+    ICON_ERROR = "🔴"        # Red circle
+    ICON_ARROW = "⬇️"        # Down arrow
+
+    lines = ["### Workflow Status", ""]
+
+    for i, (step_id, step_name, step_desc) in enumerate(WORKFLOW_STEPS):
+        # Determine the status of this step
+        if status == "idle":
+            icon = ICON_PENDING
+            style = ""
+        elif status == "error":
+            if step_id == current_step:
+                icon = ICON_ERROR
+                style = "**"
+            elif _step_index(step_id) < _step_index(current_step):
+                icon = ICON_COMPLETE
+                style = ""
+            else:
+                icon = ICON_PENDING
+                style = ""
+        elif status == "complete":
+            icon = ICON_COMPLETE
+            style = ""
+        elif step_id == current_step:
+            icon = ICON_RUNNING
+            style = "**"
+        elif _step_index(step_id) < _step_index(current_step):
+            icon = ICON_COMPLETE
+            style = ""
+        else:
+            icon = ICON_PENDING
+            style = ""
+
+        # Add the step
+        lines.append(f"{icon} {style}{step_name}{style}")
+
+        # Add arrow to next step (except for the last step)
+        if i < len(WORKFLOW_STEPS) - 1:
+            lines.append(f"&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{ICON_ARROW}")
+
+    return "\n\n".join(lines)
+
+
+def render_workflow_status(container, current_step: str = None, status: str = "idle"):
+    """Render the workflow status into a given container."""
+    container.markdown(build_workflow_status_markdown(current_step, status))
+
+
+def _step_index(step_id: str) -> int:
+    """Get the index of a step in the workflow."""
+    for i, (sid, _, _) in enumerate(WORKFLOW_STEPS):
+        if sid == step_id:
+            return i
+    return -1
+
 
 def main():
     st.title("Call Center Quality Grading System")
@@ -32,6 +103,24 @@ def main():
         st.markdown("### Supported Formats")
         st.markdown("**Audio:** WAV, MP3, M4A, FLAC, OGG")
         st.markdown("**Text:** TXT")
+
+        st.divider()
+
+        # Create a placeholder for workflow status that can be updated in real-time
+        workflow_status_placeholder = st.empty()
+
+        # Initial render of workflow status
+        if "workflow_current_step" in st.session_state:
+            render_workflow_status(
+                workflow_status_placeholder,
+                st.session_state.get("workflow_current_step"),
+                st.session_state.get("workflow_status", "idle")
+            )
+        else:
+            render_workflow_status(workflow_status_placeholder)
+
+    # Store the placeholder in session state for access during processing
+    st.session_state["workflow_status_placeholder"] = workflow_status_placeholder
 
     # Upload section at the top
     st.subheader("Upload Call Recording or Transcript")
@@ -65,6 +154,16 @@ def main():
     # Results section - full width below upload
     st.divider()
     if "results" in st.session_state:
+        # Add clear button
+        col_clear, _ = st.columns([1, 5])
+        with col_clear:
+            if st.button("Clear Results", type="secondary"):
+                del st.session_state["results"]
+                if "workflow_current_step" in st.session_state:
+                    del st.session_state["workflow_current_step"]
+                if "workflow_status" in st.session_state:
+                    del st.session_state["workflow_status"]
+                st.rerun()
         display_results(st.session_state["results"], show_transcript, show_detailed_scores)
     else:
         st.info("Upload a file and click 'Analyze Call' to see results.")
@@ -98,8 +197,7 @@ def process_file(uploaded_file, max_retries, show_transcript, show_detailed_scor
         progress_bar = st.progress(0)
         status_text = st.empty()
 
-        # Step tracking
-        steps = ["Validating", "Transcribing", "Summarizing", "Scoring", "Complete"]
+        # Step tracking for progress bar
         step_progress = {
             "intake": 20,
             "transcription": 40,
@@ -108,16 +206,58 @@ def process_file(uploaded_file, max_retries, show_transcript, show_detailed_scor
             "routing": 100,
         }
 
+        # Step descriptions for status text
+        step_descriptions = {
+            "intake": "Validating file...",
+            "transcription": "Transcribing audio...",
+            "summarization": "Generating summary...",
+            "scoring": "Evaluating quality...",
+            "routing": "Finalizing results...",
+            "error_handler": "Handling error...",
+        }
+
         status_text.text("Starting analysis...")
         progress_bar.progress(10)
 
-        # Execute workflow
-        try:
-            final_state = workflow.invoke(initial_state)
+        # Initialize workflow status in session state
+        st.session_state["workflow_current_step"] = "intake"
+        st.session_state["workflow_status"] = "running"
 
-            # Update progress
+        # Get the sidebar placeholder for real-time updates
+        sidebar_placeholder = st.session_state.get("workflow_status_placeholder")
+
+        # Execute workflow with streaming to track progress
+        try:
+            final_state = {}
+
+            # Stream through the workflow to get real-time updates
+            for event in workflow.stream(initial_state):
+                # event is a dict with node name as key and state update as value
+                for node_name, state_update in event.items():
+                    # Update session state for sidebar display
+                    st.session_state["workflow_current_step"] = node_name
+
+                    # Update progress bar and status text
+                    if node_name in step_progress:
+                        progress_bar.progress(step_progress[node_name])
+                        status_text.text(step_descriptions.get(node_name, f"Processing {node_name}..."))
+
+                    # Update sidebar workflow status in real-time
+                    if sidebar_placeholder:
+                        render_workflow_status(sidebar_placeholder, node_name, "running")
+
+                    # Accumulate state updates
+                    if isinstance(state_update, dict):
+                        final_state.update(state_update)
+
+            # Mark workflow as complete
+            st.session_state["workflow_status"] = "complete"
             progress_bar.progress(100)
             status_text.empty()
+
+            # Update sidebar to show completion
+            if sidebar_placeholder:
+                render_workflow_status(sidebar_placeholder, "routing", "complete")
 
             # Store in session state - will be displayed by main()
             st.session_state["results"] = final_state
@@ -126,8 +266,15 @@ def process_file(uploaded_file, max_retries, show_transcript, show_detailed_scor
             st.rerun()
 
         except Exception as e:
+            # Mark workflow as failed
+            st.session_state["workflow_status"] = "error"
             progress_bar.progress(100)
             status_text.empty()
+
+            # Update sidebar to show error state
+            current_step = st.session_state.get("workflow_current_step", "intake")
+            if sidebar_placeholder:
+                render_workflow_status(sidebar_placeholder, current_step, "error")
 
             # Check if it's a content validation error
             if type(e).__name__ == "ContentValidationError":
