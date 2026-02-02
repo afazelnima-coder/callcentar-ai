@@ -144,26 +144,32 @@ def main():
                 "Call Type", ["Support", "Sales", "Inquiry", "Complaint", "Other"]
             )
 
+    # Check if we should start processing (triggered by button click on previous run)
+    if st.session_state.get("start_analysis") and uploaded_file is not None:
+        st.session_state["start_analysis"] = False
+        process_file(
+            uploaded_file, max_retries, show_transcript, show_detailed_scores
+        )
+        return  # Exit after processing (process_file calls st.rerun())
+
     # Process button
     if uploaded_file is not None:
         if st.button("Analyze Call", type="primary"):
-            process_file(
-                uploaded_file, max_retries, show_transcript, show_detailed_scores
-            )
+            # Clear previous results before starting new analysis
+            if "results" in st.session_state:
+                del st.session_state["results"]
+            if "workflow_current_step" in st.session_state:
+                del st.session_state["workflow_current_step"]
+            if "workflow_status" in st.session_state:
+                del st.session_state["workflow_status"]
+
+            # Set flag to start processing on next run (after UI clears)
+            st.session_state["start_analysis"] = True
+            st.rerun()
 
     # Results section - full width below upload
     st.divider()
     if "results" in st.session_state:
-        # Add clear button
-        col_clear, _ = st.columns([1, 5])
-        with col_clear:
-            if st.button("Clear Results", type="secondary"):
-                del st.session_state["results"]
-                if "workflow_current_step" in st.session_state:
-                    del st.session_state["workflow_current_step"]
-                if "workflow_status" in st.session_state:
-                    del st.session_state["workflow_status"]
-                st.rerun()
         display_results(st.session_state["results"], show_transcript, show_detailed_scores)
     else:
         st.info("Upload a file and click 'Analyze Call' to see results.")
