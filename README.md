@@ -341,6 +341,7 @@ tests/
 - [Architecture Guide](docs/architecture.md) - Detailed system architecture and design decisions
 - [API Reference](docs/api.md) - Complete API documentation for all modules
 - [Usage Examples](docs/examples.md) - Code examples and integration patterns
+- [Deployment Guide](docs/deployment.md) - Deploy to Streamlit Cloud, Docker, Railway, Heroku, or AWS
 - [Troubleshooting](docs/troubleshooting.md) - Common issues and solutions
 
 ## Troubleshooting

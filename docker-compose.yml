@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8501:8501"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - DEEPGRAM_API_KEY=${DEEPGRAM_API_KEY}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o}
+      - MAX_FILE_SIZE_MB=${MAX_FILE_SIZE_MB:-100}
+      - MAX_RETRIES=${MAX_RETRIES:-2}
+      - PASSING_GRADE_THRESHOLD=${PASSING_GRADE_THRESHOLD:-70.0}
+      - ESCALATION_THRESHOLD=${ESCALATION_THRESHOLD:-50.0}
+    volumes:
+      # Mount for development (optional, remove in production)
+      # - .:/app
+      # Persist uploaded files (optional)
+      - uploads:/app/uploads
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  uploads:
