@@ -1,105 +1,374 @@
 # Call Center Quality Grading System
 
-A multi-agent system that automatically grades call center calls using AI. Upload a call recording or transcript and receive detailed quality scores, summaries, and improvement recommendations.
+A production-ready multi-agent AI system that automatically evaluates call center interactions. Upload call recordings or transcripts to receive comprehensive quality assessments, detailed scores across multiple categories, and actionable improvement recommendations.
+
+## Table of Contents
+
+- [Features](#features)
+- [Quick Start](#quick-start)
+- [Installation](#installation)
+- [Configuration](#configuration)
+- [Usage](#usage)
+- [Architecture](#architecture)
+- [Quality Rubric](#quality-rubric)
+- [Project Structure](#project-structure)
+- [Testing](#testing)
+- [Documentation](#documentation)
+- [Troubleshooting](#troubleshooting)
 
 ## Features
 
-- **Multi-agent architecture** using LangGraph for orchestration
-- **Audio transcription** using OpenAI Whisper API
-- **Intelligent summarization** of call content and key points
-- **Quality scoring** using a 19-item rubric across 5 categories
-- **Streamlit UI** for easy file upload and results viewing
+- **Multi-Agent Architecture**: Orchestrated workflow using LangGraph for reliable, fault-tolerant processing
+- **Audio Transcription**: High-quality speech-to-text with speaker diarization via Deepgram
+- **Intelligent Summarization**: GPT-4o powered analysis extracting key points, customer intent, and resolution status
+- **Comprehensive Scoring**: 21-item quality rubric across 5 categories with evidence-based feedback
+- **Content Validation**: Guardrails AI integration to ensure only valid call center content is processed
+- **Real-time Progress**: Live workflow status updates in the Streamlit UI
+- **Error Recovery**: Automatic retry logic with graceful degradation
+- **Partial Results**: Access to intermediate results even when later stages fail
 
-## Architecture
+## Quick Start
 
+```bash
+# Clone and setup
+git clone <repository-url>
+cd call-center
+
+# Install with uv
+uv venv
+uv pip install -e .
+
+# Configure environment
+cp .env.example .env
+# Edit .env with your API keys
+
+# Run the application
+uv run streamlit run app/main.py
 ```
-START -> Intake -> [Transcription] -> Summarization -> Scoring -> Routing -> END
-```
-
-### Agents
-
-1. **Intake Agent** - Validates input files and extracts metadata
-2. **Transcription Agent** - Converts audio to text using Whisper (skipped for text files)
-3. **Summarization Agent** - Generates call summary and identifies key points
-4. **Quality Scoring Agent** - Evaluates against 19-item rubric
-5. **Routing Agent** - Handles workflow control and error recovery
-
-## Quality Rubric
-
-The system evaluates calls across 5 categories (19 total items):
-
-| Category | Items |
-|----------|-------|
-| Greeting & Opening | Proper greeting, customer verification, set expectations |
-| Communication | Clarity, tone, active listening, empathy, avoided jargon |
-| Problem Resolution | Understanding, knowledge, solution quality, FCR, proactive help |
-| Professionalism | Courtesy, patience, ownership, confidentiality |
-| Call Closing | Summary, next steps, satisfaction check, proper closing |
-
-**Grading Scale:** A (90%+), B (80-89%), C (70-79%), D (60-69%), F (<60%)
 
 ## Installation
 
-1. Clone the repository and navigate to the project directory
+### Prerequisites
 
-2. Create a virtual environment and install dependencies:
+- Python 3.13+
+- [uv](https://github.com/astral-sh/uv) (recommended) or pip
+- OpenAI API key
+- Deepgram API key
+
+### Step-by-Step Installation
+
+1. **Clone the repository**
+   ```bash
+   git clone <repository-url>
+   cd call-center
+   ```
+
+2. **Create virtual environment and install dependencies**
+
+   Using uv (recommended):
    ```bash
    uv venv
-   uv pip install -r requirements.txt
+   uv pip install -e .
    ```
 
-3. Copy `.env.example` to `.env` and add your OpenAI API key:
+   Using pip:
+   ```bash
+   python -m venv .venv
+   source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+   pip install -e .
+   ```
+
+3. **Install development dependencies** (optional, for testing)
+   ```bash
+   uv pip install -e ".[dev]"
+   ```
+
+4. **Configure environment variables**
    ```bash
    cp .env.example .env
-   # Edit .env and set OPENAI_API_KEY
    ```
 
-## Usage
-
-Start the Streamlit app:
-
-```bash
-source .venv/bin/activate
-streamlit run app/main.py
-```
-
-Then:
-1. Upload an audio file (WAV, MP3, M4A, FLAC) or transcript (TXT)
-2. Click "Analyze Call"
-3. View the quality assessment results
-
-## Supported Formats
-
-- **Audio:** WAV, MP3, M4A, FLAC, OGG, WEBM (max 25MB per file)
-- **Text:** TXT, JSON
-
-**Note:** Audio files are limited to 25MB due to Whisper API constraints.
+   Edit `.env` and add your API keys:
+   ```env
+   OPENAI_API_KEY=sk-your-openai-api-key
+   DEEPGRAM_API_KEY=your-deepgram-api-key
+   ```
 
 ## Configuration
 
-Environment variables (set in `.env`):
+### Environment Variables
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| OPENAI_API_KEY | required | Your OpenAI API key |
-| OPENAI_MODEL | gpt-4o | Model for summarization/scoring |
-| WHISPER_MODEL | whisper-1 | Model for transcription |
-| MAX_FILE_SIZE_MB | 100 | Maximum upload file size |
-| MAX_RETRIES | 2 | Retry attempts on API errors |
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `OPENAI_API_KEY` | Yes | - | OpenAI API key for GPT-4o |
+| `DEEPGRAM_API_KEY` | Yes | - | Deepgram API key for transcription |
+| `OPENAI_MODEL` | No | `gpt-4o` | OpenAI model for summarization/scoring |
+| `MAX_FILE_SIZE_MB` | No | `100` | Maximum upload file size in MB |
+| `MAX_RETRIES` | No | `2` | Retry attempts on transient errors |
+| `AUDIO_CHUNK_SIZE_MB` | No | `24` | Chunk size for large audio files |
+| `PASSING_GRADE_THRESHOLD` | No | `70.0` | Minimum percentage for passing grade |
+| `ESCALATION_THRESHOLD` | No | `50.0` | Score below which escalation is recommended |
+
+### Supported File Formats
+
+| Type | Formats | Max Size |
+|------|---------|----------|
+| Audio | WAV, MP3, M4A, FLAC, OGG, WEBM | 100MB |
+| Text | TXT, JSON | 100MB |
+
+## Usage
+
+### Starting the Application
+
+```bash
+uv run streamlit run app/main.py
+```
+
+The application will open in your browser at `http://localhost:8501`.
+
+### Processing a Call
+
+1. **Upload a file**: Drag and drop or click to upload an audio recording or transcript
+2. **Click "Analyze Call"**: The workflow begins processing
+3. **Monitor progress**: Watch real-time status updates in the sidebar
+4. **Review results**: View comprehensive quality assessment including:
+   - Overall grade (A-F)
+   - Category scores with evidence
+   - Call summary
+   - Strengths and improvement areas
+   - Full transcript (with speaker labels for audio)
+
+### Programmatic Usage
+
+```python
+from graph.workflow import workflow
+from datetime import datetime
+
+# Process a file
+initial_state = {
+    "input_file_path": "/path/to/call.wav",
+    "max_retries": 2,
+    "started_at": datetime.now(),
+}
+
+# Run the workflow
+result = workflow.invoke(initial_state)
+
+# Access results
+print(f"Grade: {result['overall_grade']}")
+print(f"Score: {result['quality_scores'].percentage_score}%")
+print(f"Summary: {result['summary'].brief_summary}")
+```
+
+## Architecture
+
+The system uses a multi-agent architecture orchestrated by LangGraph:
+
+```
+                                    ┌─────────────────┐
+                                    │     START       │
+                                    └────────┬────────┘
+                                             │
+                                             ▼
+                                    ┌─────────────────┐
+                                    │  Intake Agent   │
+                                    │  (Validation)   │
+                                    └────────┬────────┘
+                                             │
+                              ┌──────────────┼──────────────┐
+                              │              │              │
+                              ▼              │              ▼
+                     ┌────────────────┐      │     ┌───────────────┐
+                     │ Transcription  │      │     │ Error Handler │
+                     │    Agent       │      │     └───────────────┘
+                     └────────┬───────┘      │
+                              │              │
+                              ▼              ▼
+                     ┌─────────────────────────┐
+                     │   Summarization Agent   │
+                     └───────────┬─────────────┘
+                                 │
+                                 ▼
+                     ┌─────────────────────────┐
+                     │     Scoring Agent       │
+                     └───────────┬─────────────┘
+                                 │
+                                 ▼
+                     ┌─────────────────────────┐
+                     │     Routing Agent       │──────► Retry Loop
+                     └───────────┬─────────────┘
+                                 │
+                                 ▼
+                        ┌───────────────┐
+                        │      END      │
+                        └───────────────┘
+```
+
+### Agent Responsibilities
+
+| Agent | Responsibility |
+|-------|----------------|
+| **Intake** | Validates file format, size, extracts metadata, detects content type |
+| **Transcription** | Converts audio to text using Deepgram with speaker diarization |
+| **Summarization** | Generates structured summary with GPT-4o (issue, resolution, sentiment) |
+| **Scoring** | Evaluates call against 21-item rubric, calculates grades |
+| **Routing** | Determines next step (success, retry, or failure) |
+| **Error Handler** | Generates user-friendly error messages, preserves partial results |
+
+For detailed architecture documentation, see [docs/architecture.md](docs/architecture.md).
+
+## Quality Rubric
+
+Calls are evaluated across 5 categories with 21 total criteria:
+
+### Greeting & Opening (3 items)
+- Proper greeting and self-introduction
+- Customer identity verification
+- Setting expectations for the call
+
+### Communication Skills (5 items)
+- Clarity and appropriate speaking pace
+- Professional and friendly tone
+- Active listening and clarifying questions
+- Empathy and understanding
+- Avoiding technical jargon
+
+### Problem Resolution (5 items)
+- Correctly identifying the issue
+- Product/service knowledge
+- Solution quality and appropriateness
+- First call resolution
+- Proactive assistance
+
+### Professionalism (4 items)
+- Courtesy and politeness
+- Patience with difficult situations
+- Taking ownership (no blame)
+- Handling confidential information
+
+### Call Closing (4 items)
+- Summarizing the interaction
+- Explaining next steps
+- Satisfaction check
+- Proper closing statement
+
+### Grading Scale
+
+| Grade | Percentage | Description |
+|-------|------------|-------------|
+| A | 90-100% | Excellent - Exceeds expectations |
+| B | 80-89% | Good - Meets all expectations |
+| C | 70-79% | Satisfactory - Meets basic expectations |
+| D | 60-69% | Needs Improvement - Below expectations |
+| F | <60% | Poor - Fails to meet standards |
 
 ## Project Structure
 
 ```
 call-center/
 ├── app/
-│   ├── main.py          # Streamlit UI
-│   └── config.py        # Configuration
-├── agents/              # LangGraph agent nodes
+│   ├── __init__.py
+│   ├── main.py              # Streamlit UI entry point
+│   └── config.py            # Pydantic settings configuration
+├── agents/
+│   ├── __init__.py
+│   ├── intake_agent.py      # File validation & metadata extraction
+│   ├── transcription_agent.py  # Deepgram transcription
+│   ├── summarization_agent.py  # GPT-4o summarization
+│   ├── scoring_agent.py     # Quality rubric evaluation
+│   └── routing_agent.py     # Workflow control & error handling
 ├── graph/
-│   ├── state.py         # State schema
-│   ├── workflow.py      # Graph definition
-│   └── edges.py         # Conditional routing
-├── schemas/             # Pydantic models
-├── services/            # API wrappers
-└── utils/               # Utilities
+│   ├── __init__.py
+│   ├── state.py             # TypedDict state schema
+│   ├── workflow.py          # LangGraph workflow definition
+│   └── edges.py             # Conditional routing functions
+├── schemas/
+│   ├── __init__.py
+│   ├── input_schemas.py     # Input validation schemas
+│   ├── output_schemas.py    # QualityScores, CallSummary, etc.
+│   └── metadata_schemas.py  # CallMetadata schema
+├── services/
+│   ├── __init__.py
+│   ├── openai_service.py    # OpenAI GPT API wrapper
+│   ├── deepgram_service.py  # Deepgram transcription wrapper
+│   ├── audio_processor.py   # Audio file metadata extraction
+│   └── guardrails_service.py # Content validation service
+├── utils/
+│   ├── __init__.py
+│   └── scoring_utils.py     # Grade calculation utilities
+├── tests/                   # Pytest test suite
+├── docs/                    # Additional documentation
+├── pyproject.toml           # Project dependencies
+├── .env.example             # Environment template
+└── README.md
 ```
+
+## Testing
+
+### Running Tests
+
+```bash
+# Install dev dependencies
+uv pip install -e ".[dev]"
+
+# Run all tests
+uv run pytest
+
+# Run with coverage
+uv run pytest --cov=. --cov-report=html
+
+# Run specific test file
+uv run pytest tests/test_agents/test_scoring_agent.py
+
+# Run with verbose output
+uv run pytest -v
+```
+
+### Test Structure
+
+```
+tests/
+├── conftest.py              # Shared fixtures
+├── test_agents/             # Agent unit tests
+├── test_graph/              # Workflow and routing tests
+├── test_schemas/            # Pydantic model tests
+├── test_services/           # Service wrapper tests
+└── test_utils/              # Utility function tests
+```
+
+## Documentation
+
+- [Architecture Guide](docs/architecture.md) - Detailed system architecture and design decisions
+- [API Reference](docs/api.md) - Complete API documentation for all modules
+- [Usage Examples](docs/examples.md) - Code examples and integration patterns
+- [Troubleshooting](docs/troubleshooting.md) - Common issues and solutions
+
+## Troubleshooting
+
+### Common Issues
+
+**"No API key provided"**
+- Ensure `.env` file exists with valid API keys
+- Check that environment variables are loaded
+
+**"File too large"**
+- Maximum file size is 100MB by default
+- Adjust `MAX_FILE_SIZE_MB` in `.env` if needed
+
+**"Content validation failed"**
+- The system validates that content is a call center conversation
+- Ensure the audio/text contains a dialogue between agent and customer
+
+**Transcription takes too long**
+- Large audio files may take several minutes
+- Consider chunking very long recordings
+
+For more troubleshooting help, see [docs/troubleshooting.md](docs/troubleshooting.md).
+
+## License
+
+[Add your license here]
+
+## Contributing
+
+[Add contribution guidelines here]
