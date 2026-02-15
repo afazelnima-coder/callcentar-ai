@@ -20,6 +20,132 @@ st.set_page_config(
     layout="wide",
 )
 
+def inject_custom_css():
+    """Inject custom CSS for agent animations (called once at page load)."""
+    st.markdown("""
+    <style>
+    @keyframes pulse {
+        0%, 100% { transform: scale(1); opacity: 1; }
+        50% { transform: scale(1.1); opacity: 0.8; }
+    }
+    @keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+    }
+    @keyframes wave {
+        0%, 100% { transform: scaleY(1); }
+        25% { transform: scaleY(1.5); }
+        50% { transform: scaleY(0.8); }
+        75% { transform: scaleY(1.3); }
+    }
+    @keyframes typing {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.3; }
+    }
+    @keyframes stars {
+        0%, 100% { transform: scale(1) rotate(0deg); }
+        25% { transform: scale(1.2) rotate(5deg); }
+        50% { transform: scale(1) rotate(0deg); }
+        75% { transform: scale(1.2) rotate(-5deg); }
+    }
+    @keyframes routing {
+        0% { transform: translateX(0); }
+        25% { transform: translateX(5px); }
+        50% { transform: translateX(0); }
+        75% { transform: translateX(-5px); }
+        100% { transform: translateX(0); }
+    }
+    .agent-animation {
+        display: inline-flex;
+        align-items: center;
+        padding: 20px;
+        border-radius: 12px;
+        background: linear-gradient(135deg, rgba(100, 100, 100, 0.1), rgba(150, 150, 150, 0.05));
+        margin: 10px 0;
+    }
+    .agent-icon {
+        font-size: 48px;
+        display: inline-block;
+    }
+    .intake-animation .agent-icon { animation: spin 2s linear infinite; }
+    .transcription-animation .agent-icon { animation: wave 0.6s ease-in-out infinite; }
+    .summarization-animation .agent-icon { animation: typing 1s ease-in-out infinite; }
+    .scoring-animation .agent-icon { animation: stars 1s ease-in-out infinite; }
+    .routing-animation .agent-icon { animation: routing 0.8s ease-in-out infinite; }
+    .error-animation .agent-icon { animation: pulse 1s ease-in-out infinite; color: #ff4b4b; }
+    .agent-status-text { margin-left: 15px; font-size: 18px; font-weight: 500; }
+    .agent-description { font-size: 14px; color: #888; margin-top: 5px; }
+    /* Sidebar animations */
+    @keyframes sidebar-pulse {
+        0%, 100% { transform: scale(1); opacity: 1; }
+        50% { transform: scale(1.2); opacity: 0.7; }
+    }
+    .sidebar-workflow { font-family: sans-serif; }
+    .sidebar-step { display: flex; align-items: center; padding: 6px 0; font-size: 14px; }
+    .sidebar-step-icon { font-size: 20px; margin-right: 10px; display: inline-block; min-width: 24px; text-align: center; }
+    .sidebar-step-running .sidebar-step-icon { animation: sidebar-pulse 1s ease-in-out infinite; }
+    .sidebar-step-running .sidebar-step-name { font-weight: bold; color: #ff9500; }
+    .sidebar-step-complete .sidebar-step-name { color: #28a745; }
+    .sidebar-step-error .sidebar-step-name { color: #dc3545; font-weight: bold; }
+    .sidebar-step-pending .sidebar-step-name { color: #6c757d; }
+    .sidebar-arrow { padding-left: 30px; color: #aaa; font-size: 12px; }
+    </style>
+    """, unsafe_allow_html=True)
+
+# Agent configuration with icons and descriptions
+AGENT_CONFIG = {
+    "intake": {
+        "icon": "\U0001F50D",  # Magnifying glass
+        "name": "Intake Agent",
+        "action": "Scanning and validating file...",
+        "description": "Checking file format, size, and extracting metadata",
+        "css_class": "intake-animation"
+    },
+    "transcription": {
+        "icon": "\U0001F3A4",  # Microphone
+        "name": "Transcription Agent",
+        "action": "Converting speech to text...",
+        "description": "Processing audio with speaker diarization",
+        "css_class": "transcription-animation"
+    },
+    "summarization": {
+        "icon": "\U0001F4DD",  # Memo/writing
+        "name": "Summarization Agent",
+        "action": "Generating call summary...",
+        "description": "Analyzing conversation and extracting key points",
+        "css_class": "summarization-animation"
+    },
+    "scoring": {
+        "icon": "\U00002B50",  # Star
+        "name": "Scoring Agent",
+        "action": "Evaluating call quality...",
+        "description": "Scoring against 19-item quality rubric",
+        "css_class": "scoring-animation"
+    },
+    "routing": {
+        "icon": "\U0001F3AF",  # Bullseye/target
+        "name": "Routing Agent",
+        "action": "Finalizing results...",
+        "description": "Determining outcome and next steps",
+        "css_class": "routing-animation"
+    },
+    "error_handler": {
+        "icon": "\U000026A0",  # Warning
+        "name": "Error Handler",
+        "action": "Handling error...",
+        "description": "Processing error and preserving partial results",
+        "css_class": "error-animation"
+    }
+}
+
+
+def render_agent_animation(container, agent_name: str):
+    """Render an animated status display for a specific agent."""
+    config = AGENT_CONFIG.get(agent_name, AGENT_CONFIG["intake"])
+
+    html = f'''<div class="agent-animation {config['css_class']}"><span class="agent-icon">{config['icon']}</span><div><div class="agent-status-text">{config['action']}</div><div class="agent-description">{config['description']}</div></div></div>'''
+    container.markdown(html, unsafe_allow_html=True)
+
 # Workflow steps definition
 WORKFLOW_STEPS = [
     ("intake", "Intake Agent", "Validates file & extracts metadata"),
@@ -30,58 +156,68 @@ WORKFLOW_STEPS = [
 ]
 
 
-def build_workflow_status_markdown(current_step: str = None, status: str = "idle") -> str:
-    """Build the workflow status as a markdown string."""
-    # Use Unicode emoji characters (shortcodes don't render in st.empty().markdown())
-    ICON_PENDING = "⚪"      # White circle
-    ICON_RUNNING = "🟠"      # Orange circle
-    ICON_COMPLETE = "✅"     # Check mark
-    ICON_ERROR = "🔴"        # Red circle
-    ICON_ARROW = "⬇️"        # Down arrow
+def build_workflow_status_html(current_step: str = None, status: str = "idle") -> str:
+    """Build the workflow status as HTML with animations."""
+    # Agent icons from config
+    AGENT_ICONS = {
+        "intake": "\U0001F50D",       # Magnifying glass
+        "transcription": "\U0001F3A4", # Microphone
+        "summarization": "\U0001F4DD", # Memo
+        "scoring": "\U00002B50",       # Star
+        "routing": "\U0001F3AF",       # Target
+    }
+    ICON_PENDING = "\U000026AA"    # White circle
+    ICON_COMPLETE = "\U00002705"   # Check mark
+    ICON_ERROR = "\U0001F534"      # Red circle
+    ICON_ARROW = "\U00002B07"      # Down arrow
 
-    lines = ["### Workflow Status", ""]
+    html_parts = ['<div class="sidebar-workflow">', '<h3>Workflow Status</h3>']
 
     for i, (step_id, step_name, step_desc) in enumerate(WORKFLOW_STEPS):
         # Determine the status of this step
         if status == "idle":
+            step_status = "pending"
             icon = ICON_PENDING
-            style = ""
         elif status == "error":
             if step_id == current_step:
+                step_status = "error"
                 icon = ICON_ERROR
-                style = "**"
             elif _step_index(step_id) < _step_index(current_step):
+                step_status = "complete"
                 icon = ICON_COMPLETE
-                style = ""
             else:
+                step_status = "pending"
                 icon = ICON_PENDING
-                style = ""
         elif status == "complete":
+            step_status = "complete"
             icon = ICON_COMPLETE
-            style = ""
         elif step_id == current_step:
-            icon = ICON_RUNNING
-            style = "**"
+            step_status = "running"
+            icon = AGENT_ICONS.get(step_id, "\U0001F7E0")  # Agent icon or orange circle
         elif _step_index(step_id) < _step_index(current_step):
+            step_status = "complete"
             icon = ICON_COMPLETE
-            style = ""
         else:
+            step_status = "pending"
             icon = ICON_PENDING
-            style = ""
 
-        # Add the step
-        lines.append(f"{icon} {style}{step_name}{style}")
+        # Build the step HTML
+        html_parts.append(f'<div class="sidebar-step sidebar-step-{step_status}">')
+        html_parts.append(f'<span class="sidebar-step-icon">{icon}</span>')
+        html_parts.append(f'<span class="sidebar-step-name">{step_name}</span>')
+        html_parts.append('</div>')
 
         # Add arrow to next step (except for the last step)
         if i < len(WORKFLOW_STEPS) - 1:
-            lines.append(f"&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{ICON_ARROW}")
+            html_parts.append(f'<div class="sidebar-arrow">{ICON_ARROW}</div>')
 
-    return "\n\n".join(lines)
+    html_parts.append('</div>')
+    return ''.join(html_parts)
 
 
 def render_workflow_status(container, current_step: str = None, status: str = "idle"):
     """Render the workflow status into a given container."""
-    container.markdown(build_workflow_status_markdown(current_step, status))
+    container.markdown(build_workflow_status_html(current_step, status), unsafe_allow_html=True)
 
 
 def _step_index(step_id: str) -> int:
@@ -93,6 +229,9 @@ def _step_index(step_id: str) -> int:
 
 
 def main():
+    # Inject custom CSS for animations (once per page load)
+    inject_custom_css()
+
     st.title("Call Center Quality Grading System")
     st.markdown(
         "Upload a call recording or transcript to receive automated quality assessment."
@@ -207,6 +346,7 @@ def process_file(uploaded_file, max_retries, show_transcript, show_detailed_scor
 
         # Create progress indicators
         progress_bar = st.progress(0)
+        animation_container = st.empty()  # Container for agent animations
         status_text = st.empty()
 
         # Step tracking for progress bar
@@ -218,16 +358,7 @@ def process_file(uploaded_file, max_retries, show_transcript, show_detailed_scor
             "routing": 100,
         }
 
-        # Step descriptions for status text
-        step_descriptions = {
-            "intake": "Validating file...",
-            "transcription": "Transcribing audio...",
-            "summarization": "Generating summary...",
-            "scoring": "Evaluating quality...",
-            "routing": "Finalizing results...",
-            "error_handler": "Handling error...",
-        }
-
+        # Initial status
         status_text.text("Starting analysis...")
         progress_bar.progress(10)
 
@@ -249,10 +380,12 @@ def process_file(uploaded_file, max_retries, show_transcript, show_detailed_scor
                     # Update session state for sidebar display
                     st.session_state["workflow_current_step"] = node_name
 
-                    # Update progress bar and status text
+                    # Update progress bar and animated status
                     if node_name in step_progress:
                         progress_bar.progress(step_progress[node_name])
-                        status_text.text(step_descriptions.get(node_name, f"Processing {node_name}..."))
+                        # Render agent-specific animation
+                        render_agent_animation(animation_container, node_name)
+                        status_text.empty()  # Clear text when showing animation
 
                     # Update sidebar workflow status in real-time
                     if sidebar_placeholder:
@@ -265,6 +398,7 @@ def process_file(uploaded_file, max_retries, show_transcript, show_detailed_scor
             # Mark workflow as complete
             st.session_state["workflow_status"] = "complete"
             progress_bar.progress(100)
+            animation_container.empty()  # Clear animation
             status_text.empty()
 
             # Update sidebar to show completion
@@ -281,6 +415,8 @@ def process_file(uploaded_file, max_retries, show_transcript, show_detailed_scor
             # Mark workflow as failed
             st.session_state["workflow_status"] = "error"
             progress_bar.progress(100)
+            # Show error animation
+            render_agent_animation(animation_container, "error_handler")
             status_text.empty()
 
             # Update sidebar to show error state
