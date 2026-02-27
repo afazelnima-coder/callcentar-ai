@@ -372,23 +372,148 @@ aws ecs create-service \
 
 ### Option 3: EC2 with Docker
 
-```bash
-# SSH into EC2 instance
-ssh -i key.pem ec2-user@ec2-xxx.compute.amazonaws.com
+Complete control deployment on a virtual machine.
 
-# Install Docker
+#### Step 1: Launch EC2 Instance
+
+- Go to AWS Console → EC2 → Launch Instance
+- Name: `call-center-grading`
+- AMI: Amazon Linux 2023 or Ubuntu 22.04
+- Instance type: `t3.medium` (2 vCPU, 4 GB RAM)
+- Security group: Allow SSH (port 22) and Custom TCP (port 8501) from 0.0.0.0/0
+- Launch and note the Public IP
+
+#### Step 2: Connect and Install Docker
+
+```bash
+# SSH into EC2 instance (replace with your key and IP)
+ssh -i your-key.pem ec2-user@0.0.0.0
+
+# Install Docker (Amazon Linux 2023)
 sudo yum update -y
 sudo yum install -y docker
-sudo service docker start
+sudo systemctl start docker
+sudo systemctl enable docker
 sudo usermod -a -G docker ec2-user
 
-# Run container
-docker run -d -p 80:8501 \
-  -e OPENAI_API_KEY=sk-xxx \
-  -e DEEPGRAM_API_KEY=xxx \
-  --restart unless-stopped \
-  username/call-center-grading:latest
+# Log out and back in
+exit
+ssh -i your-key.pem ec2-user@0.0.0.0
 ```
+
+#### Step 3: Get Application Code
+
+```bash
+# Clone repository
+git clone https://github.com/your-username/call-center.git
+cd call-center
+```
+
+#### Step 4: Configure Environment
+
+```bash
+# Create .env file with API keys
+cat > .env <<EOF
+OPENAI_API_KEY=sk-your-actual-key
+DEEPGRAM_API_KEY=your-actual-key
+OPENAI_MODEL=gpt-4o
+MAX_FILE_SIZE_MB=100
+EOF
+```
+
+#### Step 5: Build and Run
+
+```bash
+# Build Docker image
+docker build -t call-center-grading .
+
+# Run container
+docker run -d \
+  --name call-center-app \
+  -p 8501:8501 \
+  --env-file .env \
+  --restart unless-stopped \
+  call-center-grading
+
+# Verify it's running
+docker ps
+docker logs -f call-center-app
+```
+
+#### Step 6: Get Your Public IP
+
+**Method 1: From inside EC2 instance (using IMDSv2)**
+```bash
+# Get authentication token
+TOKEN=$(curl -X PUT "http://169.254.169.254/latest/api/token" \
+  -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")
+
+# Get public IP
+curl -H "X-aws-ec2-metadata-token: $TOKEN" \
+  http://169.254.169.254/latest/meta-data/public-ipv4
+```
+
+**Method 2: From AWS Console**
+- Go to EC2 Console → Instances
+- Find your `call-center-grading` instance
+- Look for **"Public IPv4 address"** in the details
+
+**Method 3: From your local machine (using AWS CLI)**
+```bash
+aws ec2 describe-instances \
+  --filters "Name=tag:Name,Values=call-center-grading" \
+  --query 'Reservations[0].Instances[0].PublicIpAddress' \
+  --output text
+```
+
+Then open in browser: `http://YOUR_IP:8501`
+
+#### Management Commands
+
+```bash
+# View status
+docker ps
+
+# View logs
+docker logs -f call-center-app
+
+# Restart
+docker restart call-center-app
+
+# Update after code changes
+git pull
+docker build -t call-center-grading .
+docker stop call-center-app
+docker rm call-center-app
+docker run -d --name call-center-app -p 8501:8501 \
+  --env-file .env --restart unless-stopped call-center-grading
+
+# Monitor resources
+docker stats call-center-app
+```
+
+#### Troubleshooting
+
+```bash
+# Check logs for errors
+docker logs call-center-app
+
+# Test health endpoint
+curl http://localhost:8501/_stcore/health
+
+# Verify security group allows port 8501
+# AWS Console → Security Groups → Inbound rules
+```
+
+#### Cost Estimate
+
+| Instance | vCPU | RAM | Monthly Cost |
+|----------|------|-----|--------------|
+| t3.small | 1 | 2 GB | ~$15 |
+| t3.medium | 2 | 4 GB | ~$30 |
+| Storage (20 GB) | - | - | ~$2 |
+
+**Total:** ~$17-32/month
 
 ---
 
