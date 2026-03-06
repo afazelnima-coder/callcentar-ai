@@ -13,6 +13,10 @@ from pathlib import Path
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent))
 
+# Load environment variables from .env file
+from dotenv import load_dotenv
+load_dotenv()
+
 from mcp_server import (
     grade_call_transcript,
     analyze_call_summary,
@@ -175,7 +179,7 @@ async def main():
     print("MCP SERVER FUNCTIONALITY TEST")
     print("=" * 80)
     print("\nThis script tests the MCP server tools locally.")
-    print("Make sure you have OPENAI_API_KEY set in your environment.\n")
+    print("API keys will be loaded from your .env file.\n")
 
     try:
         # Test 1: Get rubric (fast, no API calls)
