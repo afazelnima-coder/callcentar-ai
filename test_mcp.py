@@ -116,11 +116,8 @@ async def test_full_grading():
     print("\nGrading transcript (this may take 30-60 seconds)...")
     result = await grade_call_transcript(
         transcript=SAMPLE_TRANSCRIPT,
-        call_metadata={
-            "customer_id": "CUST-12345",
-            "agent_id": "AGT-SARAH",
-            "call_category": "technical_support",
-        },
+        # Note: call_metadata is optional and not used in this test
+        # The intake agent will extract metadata from the file
     )
 
     print(f"\nStatus: {result.get('status')}")

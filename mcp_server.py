@@ -101,17 +101,6 @@ async def list_tools() -> list[Tool]:
                         "type": "string",
                         "description": "The call transcript text (can include speaker labels like 'Agent: ' and 'Customer: ')",
                     },
-                    "call_metadata": {
-                        "type": "object",
-                        "description": "Optional metadata about the call (customer_id, agent_id, call_date, etc.)",
-                        "properties": {
-                            "customer_id": {"type": "string"},
-                            "agent_id": {"type": "string"},
-                            "call_date": {"type": "string"},
-                            "call_duration_seconds": {"type": "number"},
-                            "call_category": {"type": "string"},
-                        },
-                    },
                 },
                 "required": ["transcript"],
             },
@@ -127,15 +116,6 @@ async def list_tools() -> list[Tool]:
                     "audio_file_path": {
                         "type": "string",
                         "description": "Absolute path to the audio file",
-                    },
-                    "call_metadata": {
-                        "type": "object",
-                        "description": "Optional metadata about the call",
-                        "properties": {
-                            "customer_id": {"type": "string"},
-                            "agent_id": {"type": "string"},
-                            "call_date": {"type": "string"},
-                        },
                     },
                 },
                 "required": ["audio_file_path"],
@@ -179,14 +159,12 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
         if name == "grade_call_transcript":
             result = await grade_call_transcript(
                 transcript=arguments["transcript"],
-                call_metadata=arguments.get("call_metadata"),
             )
             return [TextContent(type="text", text=json.dumps(result, indent=2))]
 
         elif name == "grade_call_audio":
             result = await grade_call_audio(
                 audio_file_path=arguments["audio_file_path"],
-                call_metadata=arguments.get("call_metadata"),
             )
             return [TextContent(type="text", text=json.dumps(result, indent=2))]
 
@@ -207,15 +185,12 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
         return [TextContent(type="text", text=json.dumps(error_result, indent=2))]
 
 
-async def grade_call_transcript(
-    transcript: str, call_metadata: dict[str, Any] | None = None
-) -> dict[str, Any]:
+async def grade_call_transcript(transcript: str) -> dict[str, Any]:
     """
     Grade a call from a text transcript.
 
     Args:
         transcript: The call transcript text
-        call_metadata: Optional metadata about the call
 
     Returns:
         Dictionary with quality scores, summary, and recommendations
@@ -241,12 +216,6 @@ async def grade_call_transcript(
             "validation_errors": [],
         }
 
-        # Add metadata if provided
-        if call_metadata:
-            from schemas.metadata_schemas import CallMetadata
-
-            initial_state["metadata"] = CallMetadata(**call_metadata)
-
         # Run the workflow
         final_state = await workflow.ainvoke(initial_state)
 
@@ -258,15 +227,12 @@ async def grade_call_transcript(
         Path(temp_path).unlink(missing_ok=True)
 
 
-async def grade_call_audio(
-    audio_file_path: str, call_metadata: dict[str, Any] | None = None
-) -> dict[str, Any]:
+async def grade_call_audio(audio_file_path: str) -> dict[str, Any]:
     """
     Grade a call from an audio file.
 
     Args:
         audio_file_path: Path to the audio file
-        call_metadata: Optional metadata about the call
 
     Returns:
         Dictionary with transcription, quality scores, summary, and recommendations
@@ -288,12 +254,6 @@ async def grade_call_audio(
         "max_retries": 2,
         "validation_errors": [],
     }
-
-    # Add metadata if provided
-    if call_metadata:
-        from schemas.metadata_schemas import CallMetadata
-
-        initial_state["metadata"] = CallMetadata(**call_metadata)
 
     # Run the workflow
     final_state = await workflow.ainvoke(initial_state)
