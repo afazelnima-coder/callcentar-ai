@@ -28,6 +28,7 @@ COPY graph/ ./graph/
 COPY schemas/ ./schemas/
 COPY services/ ./services/
 COPY utils/ ./utils/
+COPY mcp_server.py mcp_http_server.py ./
 
 # Create non-root user for security
 RUN useradd --create-home appuser && chown -R appuser:appuser /app
@@ -40,8 +41,8 @@ EXPOSE 8501
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl --fail http://localhost:8501/_stcore/health || exit 1
 
-# Run the application
-ENTRYPOINT ["streamlit", "run", "app/main.py", \
+# Run the application (use CMD so docker-compose can override it)
+CMD ["streamlit", "run", "app/main.py", \
     "--server.port=8501", \
     "--server.address=0.0.0.0", \
     "--server.headless=true", \
