@@ -9,19 +9,14 @@ Usage:
     python3 mcp_http_server.py
 
 The server will run on http://0.0.0.0:8000
-Claude Desktop can connect to http://YOUR_IP:8000/sse
+Claude Desktop can connect to http://YOUR_EC2_IP:8000/sse
 """
 
-import asyncio
 import logging
-from contextlib import asynccontextmanager
 
 import uvicorn
-from starlette.applications import Starlette
-from starlette.routing import Route
-from starlette.responses import Response
-
 from mcp.server.sse import SseServerTransport
+
 from mcp_server import mcp
 
 # Configure logging
@@ -32,67 +27,46 @@ logging.basicConfig(
 logger = logging.getLogger("mcp_http_server")
 
 
-@asynccontextmanager
-async def lifespan(app: Starlette):
-    """Lifespan context manager for the application."""
+def main():
+    """Run the HTTP server."""
     logger.info("Starting MCP HTTP Server with SSE transport")
     logger.info("Server will be available at http://0.0.0.0:8000")
     logger.info("SSE endpoint: http://0.0.0.0:8000/sse")
-    yield
-    logger.info("Shutting down MCP HTTP Server")
+    logger.info("Messages endpoint: http://0.0.0.0:8000/messages")
 
+    # Create SSE transport
+    # The endpoint parameter is where client sends POST messages
+    sse = SseServerTransport("/messages")
 
-# Create SSE transport
-# The SSE transport handles the bidirectional communication:
-# - Client → Server: HTTP POST to /messages
-# - Server → Client: SSE stream from /sse
-sse_transport = SseServerTransport("/messages")
+    # Create ASGI application from the transport
+    # This handles both SSE (GET /sse) and messages (POST /messages)
+    async def app(scope, receive, send):
+        if scope["type"] == "http":
+            path = scope["path"]
 
+            if path == "/sse" and scope["method"] == "GET":
+                # Handle SSE connection
+                async with sse.connect_sse(scope, receive, send) as (read_stream, write_stream):
+                    await mcp.run(
+                        read_stream,
+                        write_stream,
+                        mcp.create_initialization_options()
+                    )
+            elif path == "/messages" and scope["method"] == "POST":
+                # Handle client messages
+                await sse.handle_post_message(scope, receive, send)
+            else:
+                # 404 for other paths
+                await send({
+                    "type": "http.response.start",
+                    "status": 404,
+                    "headers": [(b"content-type", b"text/plain")],
+                })
+                await send({
+                    "type": "http.response.body",
+                    "body": b"Not Found",
+                })
 
-async def handle_sse(request):
-    """
-    Handle SSE connection endpoint.
-
-    This keeps the connection open and streams server messages to the client.
-    Claude Desktop connects to this endpoint to receive responses.
-    """
-    async with sse_transport.connect_sse(
-        request.scope,
-        request.receive,
-        request._send
-    ) as streams:
-        await mcp.run(
-            streams[0],
-            streams[1],
-            mcp.create_initialization_options()
-        )
-    return Response()
-
-
-async def handle_messages(request):
-    """
-    Handle client messages endpoint.
-
-    This receives POST requests from the client with MCP protocol messages.
-    The response is sent back via the SSE stream, not in the HTTP response.
-    """
-    await sse_transport.handle_post_message(request.scope, request.receive, request._send)
-    return Response()
-
-
-# Create Starlette application
-app = Starlette(
-    debug=False,
-    routes=[
-        Route("/sse", endpoint=handle_sse, methods=["GET"]),
-        Route("/messages", endpoint=handle_messages, methods=["POST"]),
-    ],
-    lifespan=lifespan,
-)
-
-
-def main():
-    """Run the HTTP server."""
     # Run on all interfaces (0.0.0.0) so it's accessible from outside
     # Port 8000 is the default MCP HTTP port
     uvicorn.run(
