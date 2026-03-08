@@ -125,6 +125,27 @@ Restart Claude Desktop and test!
 
 This runs both Streamlit and MCP HTTP server together.
 
+#### 0. EC2 Prerequisites (first-time setup)
+
+Docker Compose and a recent Buildx are not pre-installed on Amazon Linux. Run these once on a fresh instance:
+
+```bash
+# Install Docker Compose
+sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+sudo chmod +x /usr/local/bin/docker-compose
+
+# Upgrade Docker Buildx (requires >= 0.17.0)
+BUILDX_VERSION=$(curl -s https://api.github.com/repos/docker/buildx/releases/latest | grep tag_name | cut -d'"' -f4)
+ARCH=$(uname -m | sed 's/x86_64/amd64/' | sed 's/aarch64/arm64/')
+mkdir -p ~/.docker/cli-plugins
+curl -L "https://github.com/docker/buildx/releases/download/${BUILDX_VERSION}/buildx-${BUILDX_VERSION}.linux-${ARCH}" -o ~/.docker/cli-plugins/docker-buildx
+chmod +x ~/.docker/cli-plugins/docker-buildx
+
+# Verify
+docker-compose --version
+docker buildx version
+```
+
 #### 1. Update Security Group
 
 Add inbound rule for port 8000:
@@ -141,11 +162,11 @@ ssh -i your-key.pem ec2-user@YOUR_EC2_IP
 # Navigate to project
 cd call-center
 
-# Pull latest changes
-git pull origin main
+# Pull latest changes (use the branch with MCP changes)
+git pull origin mcp
 
 # Start both services
-docker-compose -f docker-compose.http.yml up -d
+docker-compose -f docker-compose.http.yml up -d --build
 
 # Check logs
 docker-compose -f docker-compose.http.yml logs -f
@@ -381,6 +402,23 @@ async def handle_messages(request):
 ---
 
 ## Troubleshooting
+
+### "docker-compose: command not found"
+
+Docker Compose is not pre-installed on Amazon Linux. See [EC2 Prerequisites](#0-ec2-prerequisites-first-time-setup) above.
+
+### "compose build requires buildx 0.17.0 or later"
+
+The bundled Buildx version is too old. See [EC2 Prerequisites](#0-ec2-prerequisites-first-time-setup) to upgrade it.
+
+### "Bind for 0.0.0.0:8501 failed: port is already allocated"
+
+A previous container is still running. Stop it first:
+
+```bash
+docker stop $(docker ps -q)
+docker-compose -f docker-compose.http.yml up -d --build
+```
 
 ### "Connection refused" from Claude Desktop
 
