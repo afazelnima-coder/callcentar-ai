@@ -7,6 +7,7 @@ This guide explains how to deploy the MCP server over HTTP using SSE (Server-Sen
 - [Overview](#overview)
 - [Local Testing](#local-testing)
 - [EC2 Deployment](#ec2-deployment)
+- [Claude Code CLI Configuration](#claude-code-cli-configuration)
 - [Claude Desktop Configuration](#claude-desktop-configuration)
 - [Security Considerations](#security-considerations)
 - [Troubleshooting](#troubleshooting)
@@ -60,25 +61,47 @@ INFO:     Uvicorn running on http://0.0.0.0:8000
 INFO:     SSE endpoint: http://0.0.0.0:8000/sse
 ```
 
-### 2. Test with curl
-
-In another terminal:
+### 2. Test with Python Scripts
 
 ```bash
-# Test SSE endpoint (should keep connection open)
+# Quick tool listing (recommended)
+python3 test_mcp_tools.py
+
+# Full protocol test (shows MCP handshake + tools)
+python3 test_mcp_http.py
+```
+
+### 3. Test with curl (manual)
+
+```bash
+# Terminal 1: connect to SSE (keep open, note the session_id in output)
 curl -N http://localhost:8000/sse
 
-# In another terminal, send a test message
-curl -X POST http://localhost:8000/messages \
+# Terminal 2: initialize the MCP session
+SESSION_ID="paste-session-id-here"
+
+curl -X POST "http://localhost:8000/messages?session_id=$SESSION_ID" \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
     "id": 1,
-    "method": "tools/list"
+    "method": "initialize",
+    "params": {
+      "protocolVersion": "2024-11-05",
+      "capabilities": {},
+      "clientInfo": {"name": "test", "version": "1.0"}
+    }
   }'
+
+# Terminal 2: request tools list (watch Terminal 1 for the response)
+curl -X POST "http://localhost:8000/messages?session_id=$SESSION_ID" \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}}'
 ```
 
-### 3. Configure Claude Desktop for Local Testing
+Responses arrive on the SSE stream in Terminal 1 (not in the curl response itself).
+
+### 4. Configure Claude Desktop for Local Testing
 
 Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
@@ -195,6 +218,63 @@ EXPOSE 8501 8000
 # Run supervisor
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
 ```
+
+---
+
+## Claude Code CLI Configuration
+
+Claude Code (the CLI tool running in VSCode) reads MCP server configuration from a `.mcp.json` file in the project root.
+
+### 1. The `.mcp.json` file
+
+This file is already committed to the project:
+
+```json
+{
+  "mcpServers": {
+    "call-center-grading": {
+      "url": "http://localhost:8000/sse"
+    }
+  }
+}
+```
+
+### 2. Enable Auto-Approval
+
+Add the following to `~/.claude/settings.json` so Claude Code automatically approves the project's MCP server without prompting:
+
+```json
+{
+  "enableAllProjectMcpServers": true
+}
+```
+
+### 3. Start the Server and Reload
+
+```bash
+# Terminal: start the MCP HTTP server
+python3 mcp_http_server.py
+```
+
+Then in VSCode: `Cmd+Shift+P` → "Reload Window" (or start a new Claude Code chat).
+
+### 4. Test from Claude Code
+
+In a Claude Code conversation, ask:
+
+```
+What MCP tools do you have access to?
+```
+
+```
+Show me the call scoring rubric.
+```
+
+```
+Grade this transcript: [paste transcript]
+```
+
+Claude Code will call the tools on your local MCP server automatically.
 
 ---
 
