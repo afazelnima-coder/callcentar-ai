@@ -260,7 +260,7 @@ This file is already committed to the project:
 }
 ```
 
-### 2. Enable Auto-Approval
+### 2. Enable Auto-Approval (optional)
 
 Add the following to `~/.claude/settings.json` so Claude Code automatically approves the project's MCP server without prompting:
 
@@ -270,7 +270,24 @@ Add the following to `~/.claude/settings.json` so Claude Code automatically appr
 }
 ```
 
-### 3. Start the Server and Reload
+### 3. Register via CLI (recommended)
+
+If the "Manage MCP servers" approval dialog doesn't work or buttons are unclickable, register the server directly via the CLI instead:
+
+```bash
+# Local server
+claude mcp add --transport sse call-center-grading http://localhost:8000/sse
+
+# Remote EC2 server
+claude mcp add --transport sse call-center-grading http://YOUR_EC2_IP:8000/sse
+
+# Verify it was added
+claude mcp list
+```
+
+Then reload VSCode (`Cmd+Shift+P` → Reload Window).
+
+### 4. Start the Server and Reload
 
 ```bash
 # Terminal: start the MCP HTTP server
@@ -279,7 +296,7 @@ python3 mcp_http_server.py
 
 Then in VSCode: `Cmd+Shift+P` → "Reload Window" (or start a new Claude Code chat).
 
-### 4. Test from Claude Code
+### 5. Test from Claude Code
 
 In a Claude Code conversation, ask:
 
@@ -295,7 +312,7 @@ Show me the call scoring rubric.
 Grade this transcript: [paste transcript]
 ```
 
-Claude Code will call the tools on your local MCP server automatically.
+Claude Code will call the tools on your local or remote MCP server automatically.
 
 ---
 
@@ -419,6 +436,17 @@ A previous container is still running. Stop it first:
 docker stop $(docker ps -q)
 docker-compose -f docker-compose.http.yml up -d --build
 ```
+
+### "Manage MCP servers" dialog buttons are unclickable
+
+The VSCode approval dialog can sometimes be unresponsive. Use the CLI instead:
+
+```bash
+claude mcp add --transport sse call-center-grading http://YOUR_EC2_IP:8000/sse
+claude mcp list   # verify it was added
+```
+
+Then reload the VSCode window.
 
 ### "Connection refused" from Claude Desktop
 
