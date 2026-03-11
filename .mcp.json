@@ -1,0 +1,7 @@
+{
+  "mcpServers": {
+    "call-center-grading": {
+      "url": "http://YOUR SERVER IP:8000/sse"
+    }
+  }
+}

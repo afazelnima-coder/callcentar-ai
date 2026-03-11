@@ -26,6 +26,7 @@ A production-ready multi-agent AI system that automatically evaluates call cente
 - **Real-time Progress**: Live workflow status updates in the Streamlit UI
 - **Error Recovery**: Automatic retry logic with graceful degradation
 - **Partial Results**: Access to intermediate results even when later stages fail
+- **MCP Server**: Expose grading tools to Claude Desktop and other AI applications via Model Context Protocol
 
 ## Quick Start
 
@@ -159,6 +160,37 @@ print(f"Grade: {result['overall_grade']}")
 print(f"Score: {result['quality_scores'].percentage_score}%")
 print(f"Summary: {result['summary'].brief_summary}")
 ```
+
+### Using as MCP Server with Claude Desktop
+
+You can use the grading system directly from Claude Desktop by running it as an MCP server:
+
+1. **Configure Claude Desktop** - Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
+   ```json
+   {
+     "mcpServers": {
+       "call-center-grading": {
+         "command": "python3",
+         "args": ["/absolute/path/to/call-center/mcp_server.py"],
+         "env": {
+           "OPENAI_API_KEY": "sk-your-key",
+           "DEEPGRAM_API_KEY": "your-key"
+         }
+       }
+     }
+   }
+   ```
+
+2. **Restart Claude Desktop** - Completely quit and reopen
+
+3. **Use the tools** - Ask Claude to grade calls:
+   ```
+   "Please grade this call transcript: [paste transcript]"
+   "Analyze this audio file at /path/to/call.wav"
+   "What criteria do you use to grade calls?"
+   ```
+
+See [docs/mcp_server.md](docs/mcp_server.md) for complete MCP documentation.
 
 ## Architecture
 
@@ -298,6 +330,7 @@ call-center/
 │   └── scoring_utils.py     # Grade calculation utilities
 ├── tests/                   # Pytest test suite
 ├── docs/                    # Additional documentation
+├── mcp_server.py            # MCP server for Claude Desktop integration
 ├── pyproject.toml           # Project dependencies
 ├── .env.example             # Environment template
 └── README.md
@@ -342,6 +375,7 @@ tests/
 - [API Reference](docs/api.md) - Complete API documentation for all modules
 - [Usage Examples](docs/examples.md) - Code examples and integration patterns
 - [Deployment Guide](docs/deployment.md) - Deploy to Streamlit Cloud, Docker, Railway, Heroku, or AWS
+- [MCP Server Guide](docs/mcp_server.md) - Use with Claude Desktop and other MCP clients
 - [Troubleshooting](docs/troubleshooting.md) - Common issues and solutions
 
 ## Troubleshooting

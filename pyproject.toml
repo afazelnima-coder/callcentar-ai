@@ -16,6 +16,7 @@ dependencies = [
     "tenacity>=8.2.0",
     "deepgram-sdk>=5.0.0",
     "guardrails-ai>=0.7.0",
+    "mcp>=1.0.0",
 ]
 
 [project.optional-dependencies]
